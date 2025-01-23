@@ -1,0 +1,66 @@
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  postgres_db:
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    container_name: postgres
+    env_file:
+      - .env
+    networks:
+      - app_network
+    volumes:
+      - postgres_db:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: "root"
+      POSTGRES_PASSWORD: "password"
+      POSTGRES_DB: "product_management"
+
+  pgadmin4:
+    image: dpage/pgadmin4
+    container_name: pgadmin4
+    restart: always
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=dba@domain.com
+      - PGADMIN_DEFAULT_PASSWORD=password
+    depends_on:
+      - postgres
+    ports:
+      - "4053:80"
+    networks:
+      - app_network
+
+  migrate:
+    image: migrate/migrate
+    container_name: migrate-postgres
+    env_file:
+      - .env
+    networks:
+      - app_network
+    depends_on:
+      - postgres
+    volumes:
+      - ./db/migrations:/migrations
+      - ./docker/postgres_migrate_entrypoint.sh:/entrypoint.sh
+    entrypoint: [ "/entrypoint.sh" ]
+    links:
+      - postgres
+
+  app:
+    container_name: product_management_service
+    build: .
+    restart: on-failure
+    depends_on:
+      - postgres
+    environment:
+      - GIN_MODE=release
+    ports:
+      - "8000:8000"
+    networks:
+      - app_network
